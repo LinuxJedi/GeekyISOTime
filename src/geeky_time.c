@@ -14,41 +14,31 @@ static TextLayer *date_layer;
 static TextLayer *temp_layer;
 static TextLayer *weather_loc_layer;
 
-static BitmapLayer *bt_layer;
-static BitmapLayer *comm_layer;
-static BitmapLayer *battery_layer;
-static BitmapLayer *icon_layer;
-static BitmapLayer *therm_layer;
-static GBitmap *bt_bitmap = NULL;
-static GBitmap *comm_bitmap = NULL;
-static GBitmap *battery_bitmap = NULL;
-static GBitmap *icon_bitmap = NULL;
-static GBitmap *therm_bitmap = NULL;
+static char temp_text[10];
+static char temp_num[]= "100";
+static char temp_scale[]= "F";
+static char comm_text[]= "\xef\x88\x9c";
+
+static TextLayer *bt_layer;
+static TextLayer *comm_layer;
+static TextLayer *battery_layer;
+static TextLayer *icon_layer;
 
 static GFont custom_font_temp_30;
 static GFont custom_font_temp_40;
 
 static bool bt_connected = 1;
 static AppSync sync;
-static uint8_t sync_buffer[64];
+static uint8_t sync_buffer[192];
 static bool bt_vibrate = 1;
 
 enum TupleKey {
   WEATHER_ICON_KEY = 0x0,         // TUPLE_CSTRING
   WEATHER_TEMPERATURE_KEY = 0x1,  // TUPLE_CSTRING
   WEATHER_LOCATION_KEY = 0x2,     // TUPLE_CSTRING
+  WEATHER_SCALE_KEY = 0x4,
   CONFIG_BT_VIBRATE = 0x64        // TUPLE_CSTRING (100 in decimal)
 };
-
-static const uint32_t BATTERY_ICONS[] = {
-  RESOURCE_ID_IMG_BATTERY_CHRG, //0
-  RESOURCE_ID_IMG_BATTERY_20,   //1
-  RESOURCE_ID_IMG_BATTERY_40,   //2
-  RESOURCE_ID_IMG_BATTERY_60,   //3
-  RESOURCE_ID_IMG_BATTERY_80,   //4
-  RESOURCE_ID_IMG_BATTERY_100,  //5
-};
-
 
 static bool is_valid_temp(const char * st)
 {
@@ -134,107 +124,98 @@ static void sync_error_callback(DictionaryResult dict_error, AppMessageResult ap
     APP_LOG(APP_LOG_LEVEL_DEBUG, "App Message Sync Error: %s", error_desc);
   }
 
-  if (comm_bitmap)
-  {
-    gbitmap_destroy(comm_bitmap);
-  }
-  comm_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_COMM_ERR);
-  bitmap_layer_set_bitmap(comm_layer, comm_bitmap);
-  layer_mark_dirty(bitmap_layer_get_layer(comm_layer));
-
+  strcpy(comm_text, "\xef\x84\xa9");
 }
 
 static void sync_tuple_changed_callback(const uint32_t key, const Tuple* new_tuple, const Tuple* old_tuple, void* context) {
   APP_LOG(APP_LOG_LEVEL_DEBUG, "CallBack. Key=%i", (int)key);
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Callback. Tuple Value=%s", new_tuple->value->cstring);
+  static char weather_text[]= "\xef\x80\xbe";
+
   switch (key) {
     case WEATHER_ICON_KEY:
-      if (icon_bitmap) {
-        gbitmap_destroy(icon_bitmap);
-      }
       if (strcmp("01d", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_01d);
+        strcpy(weather_text, "\xef\x80\x8d");
       }
       else if (strcmp("01n", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_01n);
+        strcpy(weather_text, "\xef\x80\xae");
       }
       else if (strcmp("02d", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_02d);
+        strcpy(weather_text, "\xef\x80\x82");
       }
       else if (strcmp("02n", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_02n);
+        strcpy(weather_text, "\xef\x80\xb1");
       }
       else if (strcmp("03d", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_03d);
+        strcpy(weather_text, "\xef\x81\x81");
       }
       else if (strcmp("03n", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_03n);
+        strcpy(weather_text, "\xef\x81\x81");
       }
       else if (strcmp("04d", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_04d);
+        strcpy(weather_text, "\xef\x80\x93");
       }
       else if (strcmp("04n", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_04n);
+        strcpy(weather_text, "\xef\x80\x93");
       }
       else if (strcmp("09d", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_09d);
+        strcpy(weather_text, "\xef\x80\x89");
       }
       else if (strcmp("09n", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_09n);
+        strcpy(weather_text, "\xef\x80\xb7");
       }
       else if (strcmp("10d", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_10d);
+        strcpy(weather_text, "\xef\x80\x88");
       }
       else if (strcmp("10n", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_10n);
+        strcpy(weather_text, "\xef\x80\xb6");
       }
       else if (strcmp("11d", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_11d);
+        strcpy(weather_text, "\xef\x80\x85");
       }
       else if (strcmp("11n", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_11n);
+        strcpy(weather_text, "\xef\x80\xb3");
       }
       else if (strcmp("13d", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_13d);
+        strcpy(weather_text, "\xef\x80\x8a");
       }
       else if (strcmp("13n", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_13n);
+        strcpy(weather_text, "\xef\x80\xb8");
       }
       else if (strcmp("50d", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_50d);
+        strcpy(weather_text, "\xef\x80\x83");
       }
       else if (strcmp("50n", new_tuple->value->cstring) == 0)
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_50n);
+        strcpy(weather_text, "\xef\x81\x8a");
       }
       else
       {
-        icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_00);
+        strcpy(weather_text, "\xef\x80\xbe");
       }
 
-      bitmap_layer_set_bitmap(icon_layer, icon_bitmap);
-      layer_mark_dirty(bitmap_layer_get_layer(icon_layer));
+      text_layer_set_text(icon_layer, weather_text);
       break;
 
     case WEATHER_TEMPERATURE_KEY:
-      if (is_valid_temp(new_tuple->value->cstring) || strcmp("--", new_tuple->value->cstring) == 0)
+      if (is_valid_temp(new_tuple->value->cstring) || strncmp("--", new_tuple->value->cstring, 2) == 0)
       {
         if (strlen(new_tuple->value->cstring) > 2)
         {
@@ -246,7 +227,11 @@ static void sync_tuple_changed_callback(const uint32_t key, const Tuple* new_tup
           APP_LOG(APP_LOG_LEVEL_DEBUG, "2 digit temp detected. Setting font to 40");
           text_layer_set_font(temp_layer, custom_font_temp_40);
         }
-        text_layer_set_text(temp_layer, new_tuple->value->cstring);
+        strncpy(temp_num, new_tuple->value->cstring, 3);
+        strncpy(temp_text, temp_num, 3);
+        strcat(temp_text, "°");
+        strncat(temp_text, temp_scale, 1);
+        text_layer_set_text(temp_layer, temp_text);
       }
       else
       {
@@ -269,14 +254,23 @@ static void sync_tuple_changed_callback(const uint32_t key, const Tuple* new_tup
       text_layer_set_text(weather_loc_layer, new_tuple->value->cstring);
 
       //update the comm icon only once per call
-      if (comm_bitmap)
-      {
-        gbitmap_destroy(comm_bitmap);
-      }
-      comm_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_COMM_OFF);
-      bitmap_layer_set_bitmap(comm_layer, comm_bitmap);
-      layer_mark_dirty(bitmap_layer_get_layer(comm_layer));
+      strcpy(comm_text, "");
       break;
+    case WEATHER_SCALE_KEY:
+      if (strcmp(new_tuple->value->cstring, "C") == 0)
+      {
+        strcpy(temp_scale, "C");
+      }
+      else
+      {
+        strcpy(temp_scale, "F");
+      }
+      strcpy(temp_text, temp_num);
+      strcat(temp_text, "°");
+      strcat(temp_text, temp_scale);
+      text_layer_set_text(temp_layer, temp_text);
+      break;
+
     case CONFIG_BT_VIBRATE:
       if (strcmp(new_tuple->value->cstring, "On") == 0)
       {
@@ -294,13 +288,7 @@ static void sync_tuple_changed_callback(const uint32_t key, const Tuple* new_tup
 
 static void send_cmd(void) {
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Sending sync message to phone...");
-  if (comm_bitmap)
-  {
-    gbitmap_destroy(comm_bitmap);
-  }
-  comm_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_COMM_ON);
-  bitmap_layer_set_bitmap(comm_layer, comm_bitmap);
-  layer_mark_dirty(bitmap_layer_get_layer(comm_layer));
+  strcpy(comm_text, "\xef\x88\x9c");
 
   Tuplet value = TupletInteger(1, 1);
 
@@ -335,13 +323,10 @@ static void handle_tap(AccelAxisType axis, int32_t direction)
 }
 
 static void handle_bluetooth(bool connected) {
-  if (bt_bitmap)
-  {
-    gbitmap_destroy(bt_bitmap);
-  }
+  static char bt_text[5]= "";
   if (connected)
   {
-    bt_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_BT_ON);
+    strcpy(bt_text, "\xef\x84\x96");
     if (!bt_connected)
     {
       bt_connected = 1;
@@ -353,7 +338,7 @@ static void handle_bluetooth(bool connected) {
   }
   else
   {
-    bt_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_BT_OFF);
+    strcpy(bt_text, "");
     if (bt_connected)
     {
       bt_connected = 0;
@@ -364,53 +349,37 @@ static void handle_bluetooth(bool connected) {
     }
   }
   APP_LOG(APP_LOG_LEVEL_DEBUG, "handle_bluetooth connected=%i", connected);
-  bitmap_layer_set_bitmap(bt_layer, bt_bitmap);
-  layer_mark_dirty(bitmap_layer_get_layer(bt_layer));
+  text_layer_set_text(bt_layer, bt_text);
 }
 
 static void handle_battery(BatteryChargeState charge_state) {
   static char battery_text[] = "100%";
-  if (battery_bitmap) {
-    gbitmap_destroy(battery_bitmap);
-  }
-  if (charge_state.is_charging || charge_state.is_plugged) {
-
-    battery_bitmap = gbitmap_create_with_resource(BATTERY_ICONS[0]);
-  }
-  else {
+  static char battery_icon[] = "\xef\x84\x93";
     if (charge_state.charge_percent > 80) //80 - 100% charge
     {
-      battery_bitmap = gbitmap_create_with_resource(BATTERY_ICONS[5]);
+      strcpy(battery_icon, "\xef\x84\x93");
     }
-    else if (charge_state.charge_percent > 60 && charge_state.charge_percent <= 80) //60 - 80% charge
+    else if (charge_state.charge_percent > 50 && charge_state.charge_percent <= 80) //50 - 80% charge
     {
-      battery_bitmap = gbitmap_create_with_resource(BATTERY_ICONS[4]);
+      strcpy(battery_icon, "\xef\x84\x94");
     }
-    else if (charge_state.charge_percent > 40 && charge_state.charge_percent <= 60) //40 - 60% charge
+    else if (charge_state.charge_percent > 20 && charge_state.charge_percent <= 50) //20 - 50% charge
     {
-      battery_bitmap = gbitmap_create_with_resource(BATTERY_ICONS[3]);
-    }
-    else if (charge_state.charge_percent > 20 && charge_state.charge_percent <= 40) //20 - 40% charge
-    {
-      battery_bitmap = gbitmap_create_with_resource(BATTERY_ICONS[2]);
+      strcpy(battery_icon, "\xef\x84\x95");
     }
     else  //less than 20% charge
     {
-      battery_bitmap = gbitmap_create_with_resource(BATTERY_ICONS[1]);
+      strcpy(battery_icon, "\xef\x84\x92");
     }
-
-  }
   APP_LOG(APP_LOG_LEVEL_DEBUG, "handle_battery: %i remaining", charge_state.charge_percent);
   snprintf(battery_text, sizeof(battery_text), "%d%%", charge_state.charge_percent);
   text_layer_set_text(bat_perc_layer, battery_text);
-  bitmap_layer_set_bitmap(battery_layer, battery_bitmap);
-  layer_mark_dirty(bitmap_layer_get_layer(battery_layer));
+  text_layer_set_text(battery_layer, battery_icon);
 }
 
 static void handle_time_tick(struct tm* tick_time, TimeUnits units_changed) {
 
   if(units_changed & SECOND_UNIT) {
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Minute tick");
     static char time_text[] = "00:00"; // Needs to be static because it's used by the system later.
     static char second_text[] = "00";
     static char date_text[] = "Wednesday\n1970-01-01"; // Needs to be static because it's used by the system later.
@@ -423,25 +392,25 @@ static void handle_time_tick(struct tm* tick_time, TimeUnits units_changed) {
 
     strftime(time_text, sizeof(time_text), time_format, tick_time);
     strftime(second_text, sizeof(second_text), "%S", tick_time);
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Current time: %s", time_text);
 
     strftime(date_text, sizeof(date_text), "%A\n%F", tick_time);
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Current date: %s", date_text);
 
     text_layer_set_text(time_layer, time_text);
     text_layer_set_text(second_layer, second_text);
     text_layer_set_text(date_layer, date_text);
 
   }
-  //if the temp has not been refreshed yet ("--") do it no
-  if(temp_layer && 
-     text_layer_get_text(temp_layer) != NULL &&
-     strcmp("--", text_layer_get_text(temp_layer)) == 0)
+  //if the temp has not been refreshed yet (", --") do it no
+  if (units_changed & MINUTE_UNIT)
   {
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Default temp of -- detected during minute tick. Request weather refresh");
-    send_cmd();
+      if(temp_layer &&
+         text_layer_get_text(temp_layer) != NULL &&
+         strncmp("--", text_layer_get_text(temp_layer), 2) == 0)
+      {
+        APP_LOG(APP_LOG_LEVEL_DEBUG, "Default temp of -- detected during minute tick. Request weather refresh");
+        send_cmd();
+      }
   }
-  
   //Make sure that the weather is refreshed at least hourly
   if(units_changed & HOUR_UNIT) {
     APP_LOG(APP_LOG_LEVEL_DEBUG, "Hour tick");
@@ -460,19 +429,29 @@ static void init() {
   Layer *window_layer = window_get_root_layer(window);
 
   //PHONE COMM
-  comm_layer = bitmap_layer_create(GRect(35, 3, 10, 10));
-  layer_add_child(window_layer, bitmap_layer_get_layer(comm_layer));
-  comm_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_COMM_ON);
-  bitmap_layer_set_bitmap(comm_layer, comm_bitmap);
-  layer_mark_dirty(bitmap_layer_get_layer(comm_layer));
+  GFont custom_font_status = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_STATUS_14));
+  comm_layer = text_layer_create(GRect(35, 1, 15, 15));
+  text_layer_set_font(comm_layer, custom_font_status);
+  text_layer_set_text_color(comm_layer, GColorWhite);
+  text_layer_set_background_color(comm_layer, GColorClear);
+  //text_layer_set_text_alignment(comm_layer, GTextAlignmentRight);
+
+  layer_add_child(window_layer, text_layer_get_layer(comm_layer));
+
+  text_layer_set_text(comm_layer, comm_text);
 
   //BLUETOOTH
-  bt_layer = bitmap_layer_create(GRect(55, 3, 10, 10));
-  layer_add_child(window_layer, bitmap_layer_get_layer(bt_layer));
+  bt_layer = text_layer_create(GRect(55, 1, 15, 15));
+  text_layer_set_font(bt_layer, custom_font_status);
+  text_layer_set_text_color(bt_layer, GColorWhite);
+  text_layer_set_background_color(bt_layer, GColorClear);
+  text_layer_set_text_alignment(bt_layer, GTextAlignmentRight);
+
+  layer_add_child(window_layer, text_layer_get_layer(bt_layer));
 
   //BATTERY PERCENT
-  GFont custom_font_bat_perc = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_BAT_PERC_10));
-  bat_perc_layer = text_layer_create(GRect(65, 1, 33, 15));
+  GFont custom_font_bat_perc = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_BAT_PERC_12));
+  bat_perc_layer = text_layer_create(GRect(85, 1, 33, 15));
   text_layer_set_font(bat_perc_layer, custom_font_bat_perc);
   text_layer_set_text_color(bat_perc_layer, GColorWhite);
   text_layer_set_background_color(bat_perc_layer, GColorClear);
@@ -481,12 +460,17 @@ static void init() {
   layer_add_child(window_layer, text_layer_get_layer(bat_perc_layer));
 
   //BATTERY
-  battery_layer = bitmap_layer_create(GRect(144-44, 3, 36, 10));
-  layer_add_child(window_layer, bitmap_layer_get_layer(battery_layer));
+  battery_layer = text_layer_create(GRect(120, 1, 15, 15));
+  text_layer_set_font(battery_layer, custom_font_status);
+  text_layer_set_text_color(battery_layer, GColorWhite);
+  text_layer_set_background_color(battery_layer, GColorClear);
+  text_layer_set_text_alignment(battery_layer, GTextAlignmentRight);
+
+  layer_add_child(window_layer, text_layer_get_layer(battery_layer));
 
   //TIME
   GFont custom_font_time = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TIME_42));
-  time_layer = text_layer_create(GRect(2, 15, 144-20 /* width */, 45 /* 168 max height */));
+  time_layer = text_layer_create(GRect(2, 5, 144-20 /* width */, 45 /* 168 max height */));
   text_layer_set_text_alignment(time_layer, GTextAlignmentCenter);
   text_layer_set_font(time_layer, custom_font_time);
   text_layer_set_background_color(time_layer, GColorClear);
@@ -496,7 +480,7 @@ static void init() {
 
   //SECOND
   GFont custom_font_second = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_SECOND_10));
-  second_layer = text_layer_create(GRect(124, 47, 20 /* width */, 20 /* 168 max height */));
+  second_layer = text_layer_create(GRect(124, 37, 20 /* width */, 20 /* 168 max height */));
   text_layer_set_text_alignment(second_layer, GTextAlignmentCenter);
   text_layer_set_font(second_layer, custom_font_second);
   text_layer_set_background_color(second_layer, GColorClear);
@@ -506,7 +490,7 @@ static void init() {
 
   //DATE
   GFont custom_font_date = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_DATE_14));
-  date_layer = text_layer_create(GRect(2, 60, 144-2 /* width */, 35 /* 168 max height */));
+  date_layer = text_layer_create(GRect(2, 55, 144-2 /* width */, 35 /* 168 max height */));
   text_layer_set_text_alignment(date_layer, GTextAlignmentCenter);
   text_layer_set_font(date_layer, custom_font_date);
   text_layer_set_background_color(date_layer, GColorClear);
@@ -515,21 +499,20 @@ static void init() {
   layer_add_child(window_layer, text_layer_get_layer(date_layer));
 
   //WEATHER ICON
-  icon_layer = bitmap_layer_create(GRect(5, 90, 60, 60));
-  layer_add_child(window_layer, bitmap_layer_get_layer(icon_layer));
+  GFont custom_font_weather_icon = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_WEATHER_ICON_30));
+  icon_layer = text_layer_create(GRect(5, 95, 60, 60));
+  text_layer_set_text_alignment(icon_layer, GTextAlignmentCenter);
+  text_layer_set_font(icon_layer, custom_font_weather_icon);
+  text_layer_set_background_color(icon_layer, GColorClear);
+  text_layer_set_text_color(icon_layer, GColorWhite);
 
-  //THERM
-  therm_layer = bitmap_layer_create(GRect(65, 102, 16, 36));
-  therm_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_THERM);
-  bitmap_layer_set_bitmap(therm_layer, therm_bitmap);
-
-  layer_add_child(window_layer, bitmap_layer_get_layer(therm_layer));
+  layer_add_child(window_layer, text_layer_get_layer(icon_layer));
 
   //TEMP
   custom_font_temp_30 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TEMP_30));
-  custom_font_temp_40 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TEMP_42));
+  custom_font_temp_40 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TEMP_30));
 
-  temp_layer = text_layer_create(GRect(81, 95, 144-85 /* width */, 55 /* 168 max height */));
+  temp_layer = text_layer_create(GRect(60, 95, 144-65 /* width */, 60 /* 168 max height */));
   text_layer_set_font(temp_layer, custom_font_temp_40);
   text_layer_set_text_alignment(temp_layer, GTextAlignmentCenter);
   text_layer_set_background_color(temp_layer, GColorClear);
@@ -591,6 +574,7 @@ static void init() {
     TupletCString(WEATHER_ICON_KEY, "00"),
     TupletCString(WEATHER_TEMPERATURE_KEY, "--"),
     TupletCString(WEATHER_LOCATION_KEY, "Unknown"),
+    TupletCString(WEATHER_SCALE_KEY, "F"),
     TupletCString(CONFIG_BT_VIBRATE, bt_vibrate_str)
   };
 
@@ -598,7 +582,7 @@ static void init() {
       ARRAY_LENGTH(initial_values),
       sync_tuple_changed_callback, sync_error_callback, NULL);
 
-//   send_cmd();
+  send_cmd();
 }
 
 static void deinit() {
@@ -613,16 +597,10 @@ static void deinit() {
   text_layer_destroy(date_layer);
   text_layer_destroy(temp_layer);
   text_layer_destroy(weather_loc_layer);
-  gbitmap_destroy(comm_bitmap);
-  bitmap_layer_destroy(comm_layer);
-  gbitmap_destroy(bt_bitmap);
-  bitmap_layer_destroy(bt_layer);
-  gbitmap_destroy(battery_bitmap);
-  bitmap_layer_destroy(battery_layer);
-  gbitmap_destroy(icon_bitmap);
-  bitmap_layer_destroy(icon_layer);
-  gbitmap_destroy(therm_bitmap);
-  bitmap_layer_destroy(therm_layer);
+  text_layer_destroy(comm_layer);
+  text_layer_destroy(bt_layer);
+  text_layer_destroy(battery_layer);
+  text_layer_destroy(icon_layer);
   window_destroy(window);
 }
 
