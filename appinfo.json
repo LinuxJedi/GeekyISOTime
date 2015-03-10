@@ -71,7 +71,7 @@
   "shortName": "GeekyISOTime",
   "uuid": "9af6bfe3-e368-4e2a-94d5-b02c343edb6f",
   "versionCode": 1,
-  "versionLabel": "1.02",
+  "versionLabel": "2.00",
   "watchapp": {
     "watchface": true
   },
