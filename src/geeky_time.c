@@ -2,8 +2,8 @@
 #include <pebble.h>
 
 //the below 2 lines disable logging
-#undef APP_LOG
-#define APP_LOG(...)
+//#undef APP_LOG
+//#define APP_LOG(...)
 
 static Window *window;
 
@@ -13,14 +13,21 @@ static TextLayer *second_layer;
 static TextLayer *date_layer;
 static TextLayer *temp_layer;
 static TextLayer *weather_loc_layer;
+static TextLayer *updated_layer;
 
 static char temp_text[10];
-static char temp_num[]= "100";
+static char temp_num[5]= "--";
 static char temp_scale[]= "F";
-static char comm_text[]= "\xef\x88\x9c";
+static char time_text[] = "00:00"; // Needs to be static because it's used by the system later.
+static char second_text[] = "00";
+static char date_text[] = "Wednesday\n1970-01-01"; // Needs to be static because it's used by the system later.
+static char battery_text[] = "100%";
+static char battery_icon[] = "\xef\x84\x93";
+static char bt_text[5]= "";
+static char weather_text[]= "\xef\x80\xbe";
+static char updated_text[6]= "";
 
 static TextLayer *bt_layer;
-static TextLayer *comm_layer;
 static TextLayer *battery_layer;
 static TextLayer *icon_layer;
 
@@ -31,6 +38,8 @@ static bool bt_connected = 1;
 static AppSync sync;
 static uint8_t sync_buffer[192];
 static bool bt_vibrate = 1;
+
+time_t old_epoch= 0;
 
 enum TupleKey {
   WEATHER_ICON_KEY = 0x0,         // TUPLE_CSTRING
@@ -45,6 +54,11 @@ static bool is_valid_temp(const char * st)
   int len = strlen(st);
   int ascii_code;
   int negative_count = -1;
+
+  if (!st)
+  {
+    return false;
+  }
 
   for (int i = 0; i < len; i++) {
     ascii_code = (int)st[i];
@@ -123,14 +137,11 @@ static void sync_error_callback(DictionaryResult dict_error, AppMessageResult ap
   {
     APP_LOG(APP_LOG_LEVEL_DEBUG, "App Message Sync Error: %s", error_desc);
   }
-
-  strcpy(comm_text, "\xef\x84\xa9");
 }
 
 static void sync_tuple_changed_callback(const uint32_t key, const Tuple* new_tuple, const Tuple* old_tuple, void* context) {
   APP_LOG(APP_LOG_LEVEL_DEBUG, "CallBack. Key=%i", (int)key);
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Callback. Tuple Value=%s", new_tuple->value->cstring);
-  static char weather_text[]= "\xef\x80\xbe";
 
   switch (key) {
     case WEATHER_ICON_KEY:
@@ -210,12 +221,12 @@ static void sync_tuple_changed_callback(const uint32_t key, const Tuple* new_tup
       {
         strcpy(weather_text, "\xef\x80\xbe");
       }
-
       text_layer_set_text(icon_layer, weather_text);
       break;
 
     case WEATHER_TEMPERATURE_KEY:
-      if (is_valid_temp(new_tuple->value->cstring) || strncmp("--", new_tuple->value->cstring, 2) == 0)
+      APP_LOG(APP_LOG_LEVEL_DEBUG, "New temp: %s", new_tuple->value->cstring);
+      if (is_valid_temp(new_tuple->value->cstring))
       {
         if (strlen(new_tuple->value->cstring) > 2)
         {
@@ -232,10 +243,13 @@ static void sync_tuple_changed_callback(const uint32_t key, const Tuple* new_tup
         strcat(temp_text, "°");
         strncat(temp_text, temp_scale, 1);
         text_layer_set_text(temp_layer, temp_text);
+
+        strcpy(updated_text, time_text);
+        text_layer_set_text(updated_layer, updated_text);
       }
       else
       {
-        if (is_valid_temp(old_tuple->value->cstring))
+        if (old_tuple && (is_valid_temp(old_tuple->value->cstring)))
         {
           APP_LOG(APP_LOG_LEVEL_DEBUG, "invalid temp detected. Will keep current value = %s",
             old_tuple->value->cstring);
@@ -245,16 +259,17 @@ static void sync_tuple_changed_callback(const uint32_t key, const Tuple* new_tup
         {
           APP_LOG(APP_LOG_LEVEL_DEBUG, "invalid temp detected and the previous value is bad too. Using -- ");
           text_layer_set_font(temp_layer, custom_font_temp_40);
-          text_layer_set_text(temp_layer, "--");
+          strcpy(temp_text, "--");
+          text_layer_set_text(temp_layer, temp_text);
         }
       }
       break;
 
     case WEATHER_LOCATION_KEY:
       text_layer_set_text(weather_loc_layer, new_tuple->value->cstring);
+      APP_LOG(APP_LOG_LEVEL_DEBUG, "setting weather location = %s",
+            new_tuple->value->cstring);
 
-      //update the comm icon only once per call
-      strcpy(comm_text, "");
       break;
     case WEATHER_SCALE_KEY:
       if (strcmp(new_tuple->value->cstring, "C") == 0)
@@ -288,7 +303,6 @@ static void sync_tuple_changed_callback(const uint32_t key, const Tuple* new_tup
 
 static void send_cmd(void) {
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Sending sync message to phone...");
-  strcpy(comm_text, "\xef\x88\x9c");
 
   Tuplet value = TupletInteger(1, 1);
 
@@ -305,25 +319,7 @@ static void send_cmd(void) {
   app_message_outbox_send();
 }
 
-static void handle_tap(AccelAxisType axis, int32_t direction)
-{
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "tap direction=%i", (int)direction);
-  switch (axis) {
-    case ACCEL_AXIS_X:
-      APP_LOG(APP_LOG_LEVEL_DEBUG, "tap axis=X");
-      break;
-    case ACCEL_AXIS_Y:
-      APP_LOG(APP_LOG_LEVEL_DEBUG, "tap axis=Y");
-      break;
-    case ACCEL_AXIS_Z:
-      APP_LOG(APP_LOG_LEVEL_DEBUG, "tap axis=Z");
-      send_cmd();
-      break;
-  }
-}
-
 static void handle_bluetooth(bool connected) {
-  static char bt_text[5]= "";
   if (connected)
   {
     strcpy(bt_text, "\xef\x84\x96");
@@ -348,75 +344,77 @@ static void handle_bluetooth(bool connected) {
       }
     }
   }
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "handle_bluetooth connected=%i", connected);
   text_layer_set_text(bt_layer, bt_text);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "handle_bluetooth connected=%i", connected);
 }
 
 static void handle_battery(BatteryChargeState charge_state) {
-  static char battery_text[] = "100%";
-  static char battery_icon[] = "\xef\x84\x93";
-    if (charge_state.charge_percent > 80) //80 - 100% charge
-    {
-      strcpy(battery_icon, "\xef\x84\x93");
-    }
-    else if (charge_state.charge_percent > 50 && charge_state.charge_percent <= 80) //50 - 80% charge
-    {
-      strcpy(battery_icon, "\xef\x84\x94");
-    }
-    else if (charge_state.charge_percent > 20 && charge_state.charge_percent <= 50) //20 - 50% charge
-    {
-      strcpy(battery_icon, "\xef\x84\x95");
-    }
-    else  //less than 20% charge
-    {
-      strcpy(battery_icon, "\xef\x84\x92");
-    }
+  if (charge_state.charge_percent > 80) //80 - 100% charge
+  {
+    strcpy(battery_icon, "\xef\x84\x93");
+  }
+  else if (charge_state.charge_percent > 50 && charge_state.charge_percent <= 80) //50 - 80% charge
+  {
+    strcpy(battery_icon, "\xef\x84\x94");
+  }
+  else if (charge_state.charge_percent > 20 && charge_state.charge_percent <= 50) //20 - 50% charge
+  {
+    strcpy(battery_icon, "\xef\x84\x95");
+  }
+  else  //less than 20% charge
+  {
+    strcpy(battery_icon, "\xef\x84\x92");
+  }
   APP_LOG(APP_LOG_LEVEL_DEBUG, "handle_battery: %i remaining", charge_state.charge_percent);
   snprintf(battery_text, sizeof(battery_text), "%d%%", charge_state.charge_percent);
-  text_layer_set_text(bat_perc_layer, battery_text);
   text_layer_set_text(battery_layer, battery_icon);
+  text_layer_set_text(bat_perc_layer, battery_text);
 }
 
 static void handle_time_tick(struct tm* tick_time, TimeUnits units_changed) {
+  static bool first_second= true;
 
   if(units_changed & SECOND_UNIT) {
-    static char time_text[] = "00:00"; // Needs to be static because it's used by the system later.
-    static char second_text[] = "00";
-    static char date_text[] = "Wednesday\n1970-01-01"; // Needs to be static because it's used by the system later.
-    char *time_format;
-    time_format = "%I:%M";
-    if (clock_is_24h_style())
-    {
-      time_format = "%H:%M";
-    }
-
-    strftime(time_text, sizeof(time_text), time_format, tick_time);
     strftime(second_text, sizeof(second_text), "%S", tick_time);
-
-    strftime(date_text, sizeof(date_text), "%A\n%F", tick_time);
-
-    text_layer_set_text(time_layer, time_text);
     text_layer_set_text(second_layer, second_text);
-    text_layer_set_text(date_layer, date_text);
-
   }
   //if the temp has not been refreshed yet (", --") do it no
-  if (units_changed & MINUTE_UNIT)
+  if (first_second || (units_changed & MINUTE_UNIT))
   {
-      if(temp_layer &&
-         text_layer_get_text(temp_layer) != NULL &&
-         strncmp("--", text_layer_get_text(temp_layer), 2) == 0)
-      {
-        APP_LOG(APP_LOG_LEVEL_DEBUG, "Default temp of -- detected during minute tick. Request weather refresh");
-        send_cmd();
-      }
+    time_t new_epoch;
+    if (clock_is_24h_style())
+    {
+      strftime(time_text, sizeof(time_text), "%H:%M", tick_time);
+    }
+    else
+    {
+      strftime(time_text, sizeof(time_text), "%T:%M", tick_time);
+    }
+    text_layer_set_text(time_layer, time_text);
+    new_epoch=mktime(tick_time);
+    if(temp_layer &&
+       text_layer_get_text(temp_layer) != NULL &&
+       strncmp("--", text_layer_get_text(temp_layer), 2) == 0)
+    {
+      APP_LOG(APP_LOG_LEVEL_DEBUG, "Default temp of -- detected during minute tick. Request weather refresh");
+      old_epoch= new_epoch;
+      send_cmd();
+    }
+    // Refresh weather after 15 minutes
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "Old epoch: %d, new epoch: %d", (int)old_epoch, (int)new_epoch);
+    if ((new_epoch - old_epoch) >= (60*15))
+    {
+      APP_LOG(APP_LOG_LEVEL_DEBUG, "15 minute refresh");
+      old_epoch= new_epoch;
+      send_cmd();
+    }
   }
-  //Make sure that the weather is refreshed at least hourly
-  if(units_changed & HOUR_UNIT) {
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "Hour tick");
-    send_cmd();
+  if (first_second || (units_changed & DAY_UNIT)) {
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "Day tick");
+    strftime(date_text, sizeof(date_text), "%A\n%F", tick_time);
+    text_layer_set_text(date_layer, date_text);
   }
-
+  first_second= false;
 }
 
 
@@ -428,20 +426,10 @@ static void init() {
 
   Layer *window_layer = window_get_root_layer(window);
 
-  //PHONE COMM
   GFont custom_font_status = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_STATUS_14));
-  comm_layer = text_layer_create(GRect(35, 1, 15, 15));
-  text_layer_set_font(comm_layer, custom_font_status);
-  text_layer_set_text_color(comm_layer, GColorWhite);
-  text_layer_set_background_color(comm_layer, GColorClear);
-  //text_layer_set_text_alignment(comm_layer, GTextAlignmentRight);
-
-  layer_add_child(window_layer, text_layer_get_layer(comm_layer));
-
-  text_layer_set_text(comm_layer, comm_text);
 
   //BLUETOOTH
-  bt_layer = text_layer_create(GRect(55, 1, 15, 15));
+  bt_layer = text_layer_create(GRect(2, 1, 15, 15));
   text_layer_set_font(bt_layer, custom_font_status);
   text_layer_set_text_color(bt_layer, GColorWhite);
   text_layer_set_background_color(bt_layer, GColorClear);
@@ -509,7 +497,7 @@ static void init() {
   layer_add_child(window_layer, text_layer_get_layer(icon_layer));
 
   //TEMP
-  custom_font_temp_30 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TEMP_30));
+  custom_font_temp_30 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TEMP_20));
   custom_font_temp_40 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TEMP_30));
 
   temp_layer = text_layer_create(GRect(60, 95, 144-65 /* width */, 60 /* 168 max height */));
@@ -530,17 +518,14 @@ static void init() {
 
   layer_add_child(window_layer, text_layer_get_layer(weather_loc_layer));
 
+  // WEATHER UPDATED TIME
+  updated_layer = text_layer_create(GRect(100, 130, 42 /* width */, 15 /* 168 max height */));
+  text_layer_set_text_alignment(updated_layer, GTextAlignmentRight);
+  text_layer_set_font(updated_layer, custom_font_weather_loc);
+  text_layer_set_background_color(updated_layer, GColorClear);
+  text_layer_set_text_color(updated_layer, GColorWhite);
 
-  //TEST DUMMY Stuff
-  // text_layer_set_text(bat_perc_layer, "100%");
-  // battery_bitmap = gbitmap_create_with_resource(BATTERY_ICONS[0]);
-  // bitmap_layer_set_bitmap(battery_layer, battery_bitmap);
-  // icon_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMG_WEATHER_00);
-  // bitmap_layer_set_bitmap(icon_layer, icon_bitmap);
-  // text_layer_set_text(time_layer, "88:88");
-  // text_layer_set_text(date_layer, "Sun 12:22");
-  // text_layer_set_text(temp_layer, "74");
-  // text_layer_set_text(weather_loc_layer, "Denver, CO");
+  layer_add_child(window_layer, text_layer_get_layer(updated_layer));
 
 
   //EVENT SUBSCRIBTIONS
@@ -549,11 +534,9 @@ static void init() {
   handle_time_tick(current_time, SECOND_UNIT);
   handle_battery(battery_state_service_peek());
   handle_bluetooth(bluetooth_connection_service_peek());
-  tick_timer_service_subscribe(SECOND_UNIT|MINUTE_UNIT|HOUR_UNIT, &handle_time_tick);
+  tick_timer_service_subscribe(SECOND_UNIT|MINUTE_UNIT|DAY_UNIT, &handle_time_tick);
   battery_state_service_subscribe(&handle_battery);
   bluetooth_connection_service_subscribe(&handle_bluetooth);
-  accel_tap_service_subscribe(&handle_tap);
-
 
   //GET WEATHER FROM THE WEB
   const int inbound_size = 128;
@@ -582,7 +565,6 @@ static void init() {
       ARRAY_LENGTH(initial_values),
       sync_tuple_changed_callback, sync_error_callback, NULL);
 
-  send_cmd();
 }
 
 static void deinit() {
@@ -590,17 +572,16 @@ static void deinit() {
   tick_timer_service_unsubscribe();
   battery_state_service_unsubscribe();
   bluetooth_connection_service_unsubscribe();
-  accel_tap_service_unsubscribe();
   text_layer_destroy(bat_perc_layer);
   text_layer_destroy(time_layer);
   text_layer_destroy(second_layer);
   text_layer_destroy(date_layer);
   text_layer_destroy(temp_layer);
   text_layer_destroy(weather_loc_layer);
-  text_layer_destroy(comm_layer);
   text_layer_destroy(bt_layer);
   text_layer_destroy(battery_layer);
   text_layer_destroy(icon_layer);
+  text_layer_destroy(updated_layer);
   window_destroy(window);
 }
 

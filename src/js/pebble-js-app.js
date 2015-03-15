@@ -16,6 +16,7 @@ function fetchWeather(latitude, longitude) {
   console.log("JS About to fetch weather from web...");
   var response;
   var req = new XMLHttpRequest();
+  req.timeout = 10000;
   req.open('GET', "http://api.openweathermap.org/data/2.5/weather?" +
     "lat=" + latitude + "&lon=" + longitude, true);
   req.onload = function(e) {
@@ -50,27 +51,27 @@ function fetchWeather(latitude, longitude) {
           {
             temperature = temperatureF;
           }
-        }
-        if (response && response.name ) {
-          location = response.name;
-        }
-        console.log('Icon=' + icon);
-        console.log('Temp=' + temperature);
-        console.log('Temp C=' + temperatureC);
-        console.log('Temp F=' + temperatureF);
-        console.log('Location=' + location);
-        console.log('Scale=' + tempScale)
+          if (response && response.name ) {
+           location = response.name;
+          }
+          console.log('Icon=' + icon);
+          console.log('Temp=' + temperature);
+          console.log('Temp C=' + temperatureC);
+          console.log('Temp F=' + temperatureF);
+          console.log('Location=' + location);
+          console.log('Scale=' + tempScale);
 
-        Pebble.sendAppMessage({
-          "icon":icon,
-          "temperature":temperature.toString(),
-          "location":location,
-          "scale":tempScale}, sendToWatchSuccess, sendToWatchFail);
-
+          Pebble.sendAppMessage({
+            "icon":icon,
+            "temperature":temperature.toString(),
+            "location":location,
+            "scale":tempScale}, sendToWatchSuccess, sendToWatchFail);
+        }
       }
       else
       {
         console.log("HTTP Error = " + req.status);
+        Pebble.sendAppMessage({}, sendToWatchSuccess, sendToWatchFail);
       }
     }
   };
@@ -100,7 +101,7 @@ function locationError(err) {
   Pebble.sendAppMessage({
     "icon":"00",
     "temperature":"--",
-    "location":"LocErr: " + errCode,
+    "location":"Location Unavailable ",
     "scale":tempScale
   });
 }
@@ -173,7 +174,7 @@ Pebble.addEventListener("ready",
                           {
                             console.log("JS - performing init tasks" + e.ready);
                             initConfigOptions();
-                            //navigator.geolocation.watchPosition(locationSuccess, locationError, locationOptions);
+//                            navigator.geolocation.getCurrentPosition(locationSuccess, locationError, locationOptions);
                             initDone = true;
                           }
                         });
